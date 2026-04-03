@@ -209,10 +209,8 @@ void loop()
       rtdb_manager::enqueueClearReset();
     }
 
-    relay_action::setRelayState(cfg::VENTILATION_PIN,
-                                deviceData.turnVentilationOn == false);
-    relay_action::setRelayState(cfg::COOLER_127_PIN,
-                                deviceData.turnVentilation127On);
+    relay_action::setRelayState(cfg::VENTILATION_PIN, deviceData.turnVentilationOn == false);
+    relay_action::setRelayState(cfg::COOLER_127_PIN, deviceData.turnVentilation127On);
   }
 
   // -------------------------------------------------------------------------

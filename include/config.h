@@ -16,7 +16,6 @@ namespace cfg
     constexpr int PRIMARY_RETRY_LIMIT = 3;
     constexpr unsigned long WIFI_TIMEOUT_MS = 15000;
 
-    constexpr unsigned long HEARTBEAT_INTERVAL_MS = 300000;
     constexpr unsigned long OPERATIONAL_FAILURE_CONFIRM_MS = 3000;
     constexpr unsigned long RTDB_COMMUNICATION_TIMEOUT_MS = 30000;
 
@@ -32,7 +31,7 @@ namespace cfg
 
     // Pino de ENTRADA
     constexpr int STATUS_SUPPLY_PIN = 4;
-    constexpr int STATUS_MOBO_PIN = 35;
+    constexpr int STATUS_MOBO_PIN = 23;
 
     // Tempo minimo que o pino STATUS_SUPPLY_PIN deve ficar estavel para aceitar mudanca [ms]
     constexpr unsigned long SERVER_STATUS_DEBOUNCE_MS = 500;
