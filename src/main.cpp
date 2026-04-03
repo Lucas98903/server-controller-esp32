@@ -14,56 +14,66 @@
 #include "config.h"
 #include "debug.h"
 
-namespace {
-rtdb_manager::DeviceData deviceData;
+namespace
+{
+  rtdb_manager::DeviceData deviceData;
 
-bool statusInitialized = false;
-bool lastServerStatusSent = false;
+  bool statusInitialized = false;
+  bool lastServerStatusSent = false;
 
-bool systemWasOperational = false;
-bool shouldRestoreServerAfterReconnect = false;
+  bool systemWasOperational = false;
+  bool shouldRestoreServerAfterReconnect = false;
 
-unsigned long operationalFailureSinceMs = 0;
-unsigned long serverStateDebounceStartMs = 0;
+  unsigned long operationalFailureSinceMs = 0;
+  unsigned long serverStateDebounceStartMs = 0;
 
-bool isRtdbOperational() {
-  const unsigned long now = millis();
-  const unsigned long lastOk = rtdb_manager::getLastSuccessfulCommunicationMs();
+  bool isRtdbOperational()
+  {
+    const unsigned long now = millis();
+    const unsigned long lastOk = rtdb_manager::getLastSuccessfulCommunicationMs();
 
-  if (rtdb_manager::isStreamConnected())
-    return true;
+    if (rtdb_manager::isStreamConnected())
+      return true;
 
-  if (lastOk != 0 && (now - lastOk) < cfg::RTDB_COMMUNICATION_TIMEOUT_MS)
-    return true;
+    if (lastOk != 0 && (now - lastOk) < cfg::RTDB_COMMUNICATION_TIMEOUT_MS)
+      return true;
 
-  return false;
-}
+    return false;
+  }
 
-bool isSystemOperational() {
-  return wifi_connection::isConnected() && isRtdbOperational();
-}
+  bool isSystemOperational()
+  {
+    return wifi_connection::isConnected() && isRtdbOperational();
+  }
 
 } // namespace
 
-void networkTask(void * /*pvParameters*/) {
+void networkTask(void * /*pvParameters*/)
+{
   bool otaInitialized = false;
 
-  for (;;) {
+  for (;;)
+  {
     wifi_recovery::ensureConnected();
 
-    if (wifi_connection::isConnected()) {
-      if (!otaInitialized) {
+    if (wifi_connection::isConnected())
+    {
+      if (!otaInitialized)
+      {
         ota_manager::begin();
         otaInitialized = true;
       }
 
       ota_manager::handle();
 
-      if (firebase_auth_manager::refreshIdTokenIfNeeded()) {
+      if (firebase_auth_manager::refreshIdTokenIfNeeded())
+      {
         rtdb_manager::maintainConnection();
         rtdb_manager::processIncoming();
         rtdb_manager::processPendingWrites();
-      } else {
+      }
+      else
+      {
         DEBUG_PRINTLN("[AUTH] Sem token valido para acessar RTDB.");
       }
     }
@@ -72,7 +82,8 @@ void networkTask(void * /*pvParameters*/) {
   }
 }
 
-void setup() {
+void setup()
+{
   DEBUG_BEGIN(115200);
   DEBUG_PRINTLN("[SYSTEM] Inicializando...");
 
@@ -100,15 +111,18 @@ void setup() {
   );
 }
 
-void loop() {
+void loop()
+{
   const unsigned long now = millis();
   const bool systemOperational = isSystemOperational();
 
   // -------------------------------------------------------------------------
   // PERDA DE CONECTIVIDADE UTIL (Wi-Fi + RTDB)
   // -------------------------------------------------------------------------
-  if (!systemOperational) {
-    if (systemWasOperational) {
+  if (!systemOperational)
+  {
+    if (systemWasOperational)
+    {
       systemWasOperational = false;
       operationalFailureSinceMs = now;
       DEBUG_PRINTLN("[NET] Falha de conectividade util detectada. Aguardando "
@@ -117,10 +131,12 @@ void loop() {
 
     if (operationalFailureSinceMs != 0 &&
         (now - operationalFailureSinceMs >=
-         cfg::OPERATIONAL_FAILURE_CONFIRM_MS)) {
+         cfg::OPERATIONAL_FAILURE_CONFIRM_MS))
+    {
       const bool serverState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
 
-      if (serverState && !shouldRestoreServerAfterReconnect) {
+      if (serverState && !shouldRestoreServerAfterReconnect)
+      {
         DEBUG_PRINTLN("[NET] Falha confirmada. Desligando servidor...");
         relay_action::pulsePowerButton();
 
@@ -140,17 +156,22 @@ void loop() {
   // -------------------------------------------------------------------------
   // RECUPERACAO DE CONECTIVIDADE UTIL
   // -------------------------------------------------------------------------
-  if (!systemWasOperational) {
+  if (!systemWasOperational)
+  {
     systemWasOperational = true;
     DEBUG_PRINTLN("[NET] Conectividade util restabelecida.");
 
-    if (shouldRestoreServerAfterReconnect) {
+    if (shouldRestoreServerAfterReconnect)
+    {
       const bool serverState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
 
-      if (!serverState) {
+      if (!serverState)
+      {
         DEBUG_PRINTLN("[NET] Religando servidor apos retorno de Wi-Fi/RTDB...");
         relay_action::pulsePowerButton();
-      } else {
+      }
+      else
+      {
         DEBUG_PRINTLN("[NET] Servidor ja esta ligado.");
       }
 
@@ -162,23 +183,27 @@ void loop() {
   // LEITURA DE COMANDOS DO RTDB
   // -------------------------------------------------------------------------
   rtdb_manager::DeviceData latest;
-  if (rtdb_manager::consumeLatest(latest)) {
+  if (rtdb_manager::consumeLatest(latest))
+  {
     deviceData = latest;
 
-    if (deviceData.turnServerOn) {
+    if (deviceData.turnServerOn)
+    {
       DEBUG_PRINTLN("[ACTION] Comando recebido: ligar servidor.");
       relay_action::pulsePowerButton();
       rtdb_manager::enqueueClearTurnServerOn();
       rtdb_manager::enqueuePowerOnCountUpdate(deviceData.powerOnCount + 1);
     }
 
-    if (deviceData.forcePowerOff) {
+    if (deviceData.forcePowerOff)
+    {
       DEBUG_PRINTLN("[ACTION] Comando recebido: forcar desligamento.");
       relay_action::forcePowerButton();
       rtdb_manager::enqueueClearForcePowerOff();
     }
 
-    if (deviceData.resetServer) {
+    if (deviceData.resetServer)
+    {
       DEBUG_PRINTLN("[ACTION] Comando recebido: resetar servidor.");
       relay_action::PulseResetButton();
       rtdb_manager::enqueueClearReset();
@@ -195,20 +220,25 @@ void loop() {
   // -------------------------------------------------------------------------
   const bool rawServerState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
 
-  if (rawServerState != lastServerStatusSent) {
+  if (rawServerState != lastServerStatusSent)
+  {
     if (serverStateDebounceStartMs == 0)
       serverStateDebounceStartMs = now;
 
-    if ((now - serverStateDebounceStartMs) >= cfg::SERVER_STATUS_DEBOUNCE_MS) {
+    if ((now - serverStateDebounceStartMs) >= cfg::SERVER_STATUS_DEBOUNCE_MS)
+    {
       lastServerStatusSent = rawServerState;
       statusInitialized = true;
       serverStateDebounceStartMs = 0;
       rtdb_manager::enqueueServerStatusUpdate(rawServerState);
       DEBUG_PRINTLN("[RTDB] isServerOn enfileirado para atualizacao.");
     }
-  } else {
+  }
+  else
+  {
     serverStateDebounceStartMs = 0;
-    if (!statusInitialized) {
+    if (!statusInitialized)
+    {
       statusInitialized = true;
       rtdb_manager::enqueueServerStatusUpdate(rawServerState);
       DEBUG_PRINTLN(
@@ -219,13 +249,15 @@ void loop() {
   digitalWrite(cfg::LED_PIN, rawServerState ? HIGH : LOW);
 
   const bool rawMoboState = (digitalRead(cfg::STATUS_MOBO_PIN) == HIGH);
-  if (rawMoboState != deviceData.moboStatusServer) {
+  if (rawMoboState != deviceData.moboStatusServer)
+  {
     deviceData.moboStatusServer = rawMoboState;
     rtdb_manager::enqueueMoboStatusUpdate(rawMoboState);
     DEBUG_PRINTLN("[RTDB] isMoboOn enfileirado para atualizacao.");
   }
 
-  if (!deviceData.itsAlive) {
+  if (!deviceData.itsAlive)
+  {
     DEBUG_PRINTLN("[ACTION] itsAlive esta false. Enfileirando atualizacao...");
     rtdb_manager::enqueueUpdateItsAlive(true);
     deviceData.itsAlive = true;

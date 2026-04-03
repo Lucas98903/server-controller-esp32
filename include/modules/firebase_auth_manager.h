@@ -13,7 +13,7 @@ namespace firebase_auth_manager
     bool refreshIdTokenIfNeeded();
 
     bool hasValidToken();
-    const String& getIdToken();
+    const String &getIdToken();
 }
 
 #endif
