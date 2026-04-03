@@ -17,7 +17,7 @@ namespace rtdb_manager
         bool turnVentilation127On = false;
         bool resetServer = false;
 
-        bool isServerOn = false;
+        bool isPowerOn = false;
         bool moboStatusServer = false;
         bool itsAlive = true;
 

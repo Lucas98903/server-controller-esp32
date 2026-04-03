@@ -23,6 +23,7 @@ namespace
 
   bool systemWasOperational = false;
   bool shouldRestoreServerAfterReconnect = false;
+  bool isServerOn = false;
 
   unsigned long operationalFailureSinceMs = 0;
   unsigned long serverStateDebounceStartMs = 0;
@@ -125,13 +126,10 @@ void loop()
     {
       systemWasOperational = false;
       operationalFailureSinceMs = now;
-      DEBUG_PRINTLN("[NET] Falha de conectividade util detectada. Aguardando "
-                    "confirmacao...");
+      DEBUG_PRINTLN("[NET] Falha de conectividade util detectada. Aguardando confirmacao...");
     }
 
-    if (operationalFailureSinceMs != 0 &&
-        (now - operationalFailureSinceMs >=
-         cfg::OPERATIONAL_FAILURE_CONFIRM_MS))
+    if (operationalFailureSinceMs != 0 && (now - operationalFailureSinceMs >= cfg::OPERATIONAL_FAILURE_CONFIRM_MS))
     {
       const bool serverState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
 
@@ -141,8 +139,7 @@ void loop()
         relay_action::pulsePowerButton();
 
         shouldRestoreServerAfterReconnect = true;
-        DEBUG_PRINTLN("[NET] Servidor marcado para religar quando Wi-Fi e RTDB "
-                      "voltarem.");
+        DEBUG_PRINTLN("[NET] Servidor marcado para religar quando Wi-Fi e RTDB voltarem.");
       }
 
       operationalFailureSinceMs = 0;
@@ -183,6 +180,49 @@ void loop()
   // LEITURA DE COMANDOS DO RTDB
   // -------------------------------------------------------------------------
   rtdb_manager::DeviceData latest;
+
+  // -------------------------------------------------------------------------
+  // SINCRONISMO DE ESTADOS (com debounce)
+  // -------------------------------------------------------------------------
+  const bool rawServerState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
+  const bool rawMoboState = (digitalRead(cfg::STATUS_MOBO_PIN) == HIGH);
+
+  if (rawServerState != lastServerStatusSent)
+  {
+    if (serverStateDebounceStartMs == 0)
+      serverStateDebounceStartMs = now;
+
+    if ((now - serverStateDebounceStartMs) >= cfg::SERVER_STATUS_DEBOUNCE_MS)
+    {
+      lastServerStatusSent = rawServerState;
+      statusInitialized = true;
+      serverStateDebounceStartMs = 0;
+      rtdb_manager::enqueueServerStatusUpdate(rawServerState);
+      DEBUG_PRINTLN("[RTDB] isPowerOn enfileirado para atualizacao.");
+    }
+  }
+  else
+  {
+    serverStateDebounceStartMs = 0;
+    if (!statusInitialized)
+    {
+      statusInitialized = true;
+      rtdb_manager::enqueueServerStatusUpdate(rawServerState);
+      DEBUG_PRINTLN(
+          "[RTDB] isPowerOn enfileirado para atualizacao (inicial).");
+    }
+  }
+
+  digitalWrite(cfg::LED_PIN, rawServerState ? HIGH : LOW);
+
+  if (rawMoboState != deviceData.moboStatusServer)
+  {
+    deviceData.moboStatusServer = rawMoboState;
+    rtdb_manager::enqueueMoboStatusUpdate(rawMoboState);
+    DEBUG_PRINTLN("[RTDB] isMoboOn enfileirado para atualizacao.");
+  }
+
+  isServerOn = rawServerState || rawMoboState;
   if (rtdb_manager::consumeLatest(latest))
   {
     deviceData = latest;
@@ -209,49 +249,17 @@ void loop()
       rtdb_manager::enqueueClearReset();
     }
 
-    relay_action::setRelayState(cfg::VENTILATION_PIN, deviceData.turnVentilationOn == false);
-    relay_action::setRelayState(cfg::COOLER_127_PIN, deviceData.turnVentilation127On);
-  }
-
-  // -------------------------------------------------------------------------
-  // SINCRONISMO DE ESTADOS (com debounce)
-  // -------------------------------------------------------------------------
-  const bool rawServerState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
-
-  if (rawServerState != lastServerStatusSent)
-  {
-    if (serverStateDebounceStartMs == 0)
-      serverStateDebounceStartMs = now;
-
-    if ((now - serverStateDebounceStartMs) >= cfg::SERVER_STATUS_DEBOUNCE_MS)
+    if (isServerOn)
     {
-      lastServerStatusSent = rawServerState;
-      statusInitialized = true;
-      serverStateDebounceStartMs = 0;
-      rtdb_manager::enqueueServerStatusUpdate(rawServerState);
-      DEBUG_PRINTLN("[RTDB] isServerOn enfileirado para atualizacao.");
-    }
-  }
-  else
-  {
-    serverStateDebounceStartMs = 0;
-    if (!statusInitialized)
-    {
-      statusInitialized = true;
-      rtdb_manager::enqueueServerStatusUpdate(rawServerState);
-      DEBUG_PRINTLN(
-          "[RTDB] isServerOn enfileirado para atualizacao (inicial).");
+      relay_action::setRelayState(cfg::VENTILATION_PIN, deviceData.turnVentilationOn == false);
+      relay_action::setRelayState(cfg::COOLER_127_PIN, deviceData.turnVentilation127On);
     }
   }
 
-  digitalWrite(cfg::LED_PIN, rawServerState ? HIGH : LOW);
-
-  const bool rawMoboState = (digitalRead(cfg::STATUS_MOBO_PIN) == HIGH);
-  if (rawMoboState != deviceData.moboStatusServer)
+  if (!isServerOn)
   {
-    deviceData.moboStatusServer = rawMoboState;
-    rtdb_manager::enqueueMoboStatusUpdate(rawMoboState);
-    DEBUG_PRINTLN("[RTDB] isMoboOn enfileirado para atualizacao.");
+    relay_action::setRelayState(cfg::VENTILATION_PIN, false);
+    relay_action::setRelayState(cfg::COOLER_127_PIN, false);
   }
 
   if (!deviceData.itsAlive)
