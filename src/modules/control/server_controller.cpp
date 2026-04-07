@@ -23,8 +23,7 @@ namespace
     bool lastMoboStatusSent = false;
     bool moboStatusInitialized = false;
     unsigned long moboStateDebounceStartMs = 0;
-    bool isServerOn = false;
-} // namespace
+}
 
 namespace server_controller
 {
@@ -68,7 +67,7 @@ namespace server_controller
                 rtdb_manager::enqueueClearReset();
             }
 
-            if (isServerOn)
+            if (server_status::isServerOn())
             {
                 relay_action::setRelayState(cfg::VENTILATION_PIN, deviceData.turnVentilationOn == false);
                 relay_action::setRelayState(cfg::COOLER_127_PIN, deviceData.turnVentilation127On);
@@ -78,7 +77,7 @@ namespace server_controller
         // -------------------------------------------------------------------------
         // VENTILACAO: desligar quando servidor esta off
         // -------------------------------------------------------------------------
-        if (!isServerOn)
+        if (!server_status::isServerOn())
         {
             relay_action::setRelayState(cfg::VENTILATION_PIN, false);
             relay_action::setRelayState(cfg::COOLER_127_PIN, false);
