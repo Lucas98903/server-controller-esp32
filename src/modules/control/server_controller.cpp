@@ -13,17 +13,7 @@
 #include "debug.h"
 #include "modules/utils/is_server_on.h"
 
-namespace
-{
-    rtdb_manager::DeviceData deviceData;
-
-    bool statusInitialized = false;
-    bool lastServerStatusSent = false;
-    unsigned long serverStateDebounceStartMs = 0;
-    bool lastMoboStatusSent = false;
-    bool moboStatusInitialized = false;
-    unsigned long moboStateDebounceStartMs = 0;
-}
+rtdb_manager::DeviceData deviceData;
 
 namespace server_controller
 {

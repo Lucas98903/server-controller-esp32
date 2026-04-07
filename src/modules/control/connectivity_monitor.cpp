@@ -14,10 +14,11 @@
 #include "config.h"
 #include "debug.h"
 
-
 namespace
 {
-    bool systemWasOperational = false;
+    // Assume que o sistema era operacional antes do boot para que a primeira
+    // perda de conectividade (inclusive na inicializacao) dispare o timer.
+    bool systemWasOperational = true;
     bool shouldRestoreServerAfterReconnect = false;
     unsigned long operationalFailureSinceMs = 0;
 
@@ -60,26 +61,19 @@ namespace connectivity_monitor
                 DEBUG_PRINTLN("[NET] Falha de conectividade util detectada. Aguardando confirmacao...");
             }
 
-            if (operationalFailureSinceMs != 0 && (now - operationalFailureSinceMs >=
-                cfg::OPERATIONAL_FAILURE_CONFIRM_MS))
+            if (operationalFailureSinceMs != 0 &&
+                (now - operationalFailureSinceMs >= cfg::OPERATIONAL_FAILURE_CONFIRM_MS))
             {
-                const bool serverState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
-
-                if (serverState && !shouldRestoreServerAfterReconnect)
+                if (server_status::isServerOn() && !shouldRestoreServerAfterReconnect)
                 {
                     DEBUG_PRINTLN("[NET] Falha confirmada. Desligando servidor...");
                     relay_action::pulsePowerButton();
-
                     shouldRestoreServerAfterReconnect = true;
-                    DEBUG_PRINTLN("[NET] Servidor marcado para religar quando Wi-Fi e RTDB voltarem.");
+                    DEBUG_PRINTLN("[NET] Servidor marcado para religar quando a internet voltar.");
                 }
 
                 operationalFailureSinceMs = 0;
             }
-
-            // Desliga o servidor, porque esta sem internet
-            if (server_status::isServerOn())
-                relay_action::pulsePowerButton();
 
             return false;
         }
@@ -94,11 +88,9 @@ namespace connectivity_monitor
 
             if (shouldRestoreServerAfterReconnect)
             {
-                const bool serverState = (digitalRead(cfg::STATUS_SUPPLY_PIN) == HIGH);
-
-                if (!serverState)
+                if (!server_status::isServerOn())
                 {
-                    DEBUG_PRINTLN("[NET] Religando servidor apos retorno de Wi-Fi/RTDB...");
+                    DEBUG_PRINTLN("[NET] Religando servidor apos retorno da internet...");
                     relay_action::pulsePowerButton();
                 }
                 else
