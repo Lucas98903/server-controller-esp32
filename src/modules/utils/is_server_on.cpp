@@ -22,7 +22,6 @@ namespace server_status
 
         return stable;
     }
-
     bool isSupplyOn()
     {
         static bool lastRaw = false;

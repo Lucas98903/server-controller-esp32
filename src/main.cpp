@@ -3,6 +3,7 @@
 //
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 #include "modules/control/connectivity_monitor.h"
 #include "modules/network/network_task.h"
@@ -18,33 +19,33 @@
 
 void setup()
 {
-  DEBUG_BEGIN(115200);
-  DEBUG_PRINTLN("[SYSTEM] Inicializando...");
+    DEBUG_BEGIN(115200);
+    DEBUG_PRINTLN("[SYSTEM] Inicializando...");
 
-  pinMode(cfg::STATUS_SUPPLY_PIN, INPUT);
-  pinMode(cfg::STATUS_MOBO_PIN, INPUT);
+    pinMode(cfg::STATUS_SUPPLY_PIN, INPUT);
+    pinMode(cfg::STATUS_MOBO_PIN, INPUT);
 
-  pinMode(cfg::VENTILATION_PIN, OUTPUT);
-  pinMode(cfg::STARTER_PIN, OUTPUT);
-  pinMode(cfg::LED_PIN, OUTPUT);
-  pinMode(cfg::RESET_PIN, OUTPUT);
-  pinMode(cfg::COOLER_127_PIN, OUTPUT);
+    pinMode(cfg::VENTILATION_PIN, OUTPUT);
+    pinMode(cfg::STARTER_PIN, OUTPUT);
+    pinMode(cfg::LED_PIN, OUTPUT);
+    pinMode(cfg::RESET_PIN, OUTPUT);
+    pinMode(cfg::COOLER_127_PIN, OUTPUT);
 
-  wifi_recovery::ensureConnected();
+    wifi_recovery::ensureConnected();
 
-  relay_action::setRelayState(cfg::STARTER_PIN, false);
-  relay_action::setRelayState(cfg::VENTILATION_PIN, false);
-  relay_action::setRelayState(cfg::RESET_PIN, false);
-  relay_action::setRelayState(cfg::COOLER_127_PIN, false);
+    relay_action::setRelayState(cfg::STARTER_PIN, false);
+    relay_action::setRelayState(cfg::VENTILATION_PIN, false);
+    relay_action::setRelayState(cfg::RESET_PIN, false);
+    relay_action::setRelayState(cfg::COOLER_127_PIN, false);
 
-  rtdb_manager::begin();
-  network_task::begin();
+    rtdb_manager::begin();
+    network_task::begin();
 }
 
 void loop()
 {
-  if (!connectivity_monitor::update())
-    return;
+    if (!connectivity_monitor::update())
+        return;
 
-  server_controller::update();
+    server_controller::update();
 }

@@ -10,9 +10,11 @@
 
 extern bool ventilationOn;
 
-bool setVentilationState(bool turnOn);
-void handleVentilationCommand(JsonDocument& doc);
-void sendVentilationAck(int requestId, const char* action, bool success, const char* message);
+
+namespace mqtt_ventilation
+{
+    void handleVentilationCommand(JsonDocument& doc);
+}
 
 
 #endif //SERVER_CONTROLLER_ESP32_VENTILATION_H

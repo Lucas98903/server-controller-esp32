@@ -55,7 +55,7 @@ namespace cfg
     constexpr const char* TOPIC_HEALTH_RESPONSE = "server-controller/health/response";
 
     // Health check
-    constexpr unsigned long HEALTH_INTERVAL_MS = 60000;
+    constexpr unsigned long HEALTH_INTERVAL_MS = 30000;
     constexpr unsigned long HEALTH_TIMEOUT_MS = 4000;
     constexpr int MAX_HEALTH_MISSES = 2;
 }

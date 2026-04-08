@@ -21,11 +21,11 @@ namespace mqtt_manager
         mqttClient.setKeepAlive(30);
     }
 
-    void connectMqtt(MQTT_CALLBACK_SIGNATURE)
+    void connectMqtt()
     {
         while (!mqttClient.connected())
         {
-            DEBUG_PRINTLN("[MQTT] Conectando no broker...");
+            DEBUG_PRINT("[MQTT] Conectando no broker...");
 
             if (mqttClient.connect(cfg::MQTT_CLIENT_ID))
             {
@@ -34,17 +34,18 @@ namespace mqtt_manager
                 mqttClient.subscribe(cfg::TOPIC_CMD_VENTILATION, 1);
                 mqttClient.subscribe(cfg::TOPIC_HEALTH_RESPONSE, 1);
 
-                DEBUG_PRINTLN("[MQTT] Inscrito em ");
+                DEBUG_PRINT("[MQTT] Inscrito em ");
                 DEBUG_PRINTLN(cfg::TOPIC_CMD_VENTILATION);
 
-                DEBUG_PRINTLN("[MQTT] Inscrito em ");
+                DEBUG_PRINT("[MQTT] Inscrito em ");
                 DEBUG_PRINTLN(cfg::TOPIC_HEALTH_RESPONSE);
 
-                resetHealthCheckState();
+                 mqtt_health::resetHealthCheckState();
             }
             else
             {
-                DEBUG_PRINTLN("falhou. state=");
+                // TODO: Seria interessante ter logs para saber se essa comunicação está falhano no Firebase
+                DEBUG_PRINT("falhou! Nao contectou no broker state=");
                 DEBUG_PRINTLN(mqttClient.state());
                 delay(3000);
             }
