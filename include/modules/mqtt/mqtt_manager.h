@@ -15,7 +15,7 @@ extern PubSubClient mqttClient;
 namespace mqtt_manager
 {
     void setupMqtt(MQTT_CALLBACK_SIGNATURE);
-    void connectMqtt();
+    bool connectMqtt();
     bool publishJson(const char* topic, JsonDocument& doc);
 }
 

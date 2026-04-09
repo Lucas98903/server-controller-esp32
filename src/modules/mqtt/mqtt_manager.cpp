@@ -21,8 +21,10 @@ namespace mqtt_manager
         mqttClient.setKeepAlive(30);
     }
 
-    void connectMqtt()
+    bool connectMqtt()
     {
+        int8_t attempt = 0;
+        // TODO: Implementar tentativas e retornar um booleano
         while (!mqttClient.connected())
         {
             DEBUG_PRINT("[MQTT] Conectando no broker...");
@@ -40,16 +42,23 @@ namespace mqtt_manager
                 DEBUG_PRINT("[MQTT] Inscrito em ");
                 DEBUG_PRINTLN(cfg::TOPIC_HEALTH_RESPONSE);
 
-                 mqtt_health::resetHealthCheckState();
+                mqtt_health::resetHealthCheckState();
             }
             else
             {
-                // TODO: Seria interessante ter logs para saber se essa comunicação está falhano no Firebase
+                if (++attempt >= cfg::MQTT_ATTEMPT_CONNECTION)
+                {
+                    // TODO: Seria interessante ter logs para saber se essa comunicação está falhano no Firebase
+                    DEBUG_PRINTLN("[MQTT] Falha ao conectar após várias tentativas. Verifique o broker.");
+                    return false;
+                }
+
                 DEBUG_PRINT("falhou! Nao contectou no broker state=");
                 DEBUG_PRINTLN(mqttClient.state());
-                delay(3000);
+                delay(cfg::MQTT_ATTEMPT_DELAY);
             }
         }
+        return true;
     }
 
     bool publishJson(const char* topic, JsonDocument& doc)
