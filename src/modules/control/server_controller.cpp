@@ -39,7 +39,7 @@ namespace server_controller
     {
         const bool supplyIsOn = server_status::isSupplyOn();
         const bool moboIsOn = server_status::isMoboOn();
-        const bool serverIsOn = supplyIsOn || moboIsOn;
+        const bool serverIsOn = server_status::isServerOn();
 
         if (serverIsOn && !s_lastServerOnState)
             s_serverOnSinceMs = millis();
