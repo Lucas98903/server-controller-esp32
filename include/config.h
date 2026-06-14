@@ -33,21 +33,35 @@ namespace cfg
     constexpr int STATUS_SUPPLY_PIN = 4;
     constexpr int STATUS_MOBO_PIN = 23;
 
-    // Tempo minimo que o pino STATUS_SUPPLY_PIN deve ficar estavel para aceitar mudanca [ms]
-    constexpr unsigned long SERVER_STATUS_DEBOUNCE_MS = 500;
+    // Tempo minimo que os pinos de status devem ficar estaveis para aceitar mudanca [ms]
+    constexpr unsigned long SERVER_STATUS_DEBOUNCE_MS = 80;
 
-    // Tempo para ligar o servidor [ms]
+    // Tempo para ligar e resetar o servidor [ms]
     constexpr unsigned long POWER_ON_AND_RESET = 700;
 
     // Tempo para forcar desligamento [ms];
     constexpr unsigned long FORCE_POWER_OFF = 15000;
 
-    constexpr float SERIES_RESISTOR = 10000.0f;
-    constexpr float NOMINAL_RESISTANCE = 10000.0f;
-    constexpr float NOMINAL_TEMPERATURE = 25.0f;
-    constexpr float BETA_COEFFICIENT = 3950.0f;
-    constexpr float ADC_MAX = 4095.0f;
-    constexpr float VCC = 3.3f;
+    // =======================================- MQTT -=======================================
+    // Configuracoes do broker
+    constexpr const char *MQTT_BROKER_HOST = "192.168.89.227";
+    constexpr uint16_t MQTT_BROKER_PORT = 1883;
+    constexpr uint8_t MQTT_ATTEMPT_CONNECTION = 3;
+    constexpr uint16_t MQTT_ATTEMPT_DELAY = 3000;
+    constexpr const char *MQTT_CLIENT_ID = "esp32-server-controller";
+    constexpr unsigned long MQTT_BOOT_GRACE_MS = 90000;
+    constexpr uint8_t MQTT_FAILED_BEFORE_POWER_ACTION = 3;
+
+    // Topicos MQTT
+    constexpr const char *TOPIC_CMD_VENTILATION = "server-controller/cmd/change-fan-state";
+    constexpr const char *TOPIC_ACK_VENTILATION = "server-controller/ack/change-fan-state";
+    constexpr const char *TOPIC_HEALTH_REQUEST = "server-controller/health/request";
+    constexpr const char *TOPIC_HEALTH_RESPONSE = "server-controller/health/response";
+
+    // Health check
+    constexpr unsigned long HEALTH_INTERVAL_MS = 30000;
+    constexpr unsigned long HEALTH_TIMEOUT_MS = 4000;
+    constexpr int MAX_HEALTH_MISSES = 2;
 }
 
 #endif // SERVER_CONTROLLER_ESP32_CONFIG_H

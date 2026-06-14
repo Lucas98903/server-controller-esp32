@@ -39,7 +39,7 @@ namespace rtdb_manager
     bool updateItsAlive();
 
     // Fila de escritas pendentes — chamar do loop(), processar na network task
-    void enqueueServerStatusUpdate(bool isOn);
+    void enqueueSupplyStatusUpdate(bool isOn);
     void enqueueMoboStatusUpdate(bool isOn);
     void enqueueClearTurnServerOn();
     void enqueueClearForcePowerOff();
