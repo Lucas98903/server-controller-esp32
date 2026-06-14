@@ -10,7 +10,6 @@
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-
 namespace mqtt_manager
 {
     void setupMqtt(MQTT_CALLBACK_SIGNATURE)
@@ -21,6 +20,7 @@ namespace mqtt_manager
         mqttClient.setKeepAlive(30);
     }
 
+    // Faz a conexão com o broker MQTT. Retorna true se a conexão for bem sucedida, ou false após várias tentativas falhas.
     bool connectMqtt()
     {
         int8_t attempt = 0;
@@ -61,7 +61,7 @@ namespace mqtt_manager
         return true;
     }
 
-    bool publishJson(const char* topic, JsonDocument& doc)
+    bool publishJson(const char *topic, JsonDocument &doc)
     {
         const size_t requiredSize = measureJson(doc);
 
@@ -82,7 +82,7 @@ namespace mqtt_manager
 
         return mqttClient.publish(
             topic,
-            reinterpret_cast<const uint8_t*>(buffer),
+            reinterpret_cast<const uint8_t *>(buffer),
             jsonSize,
             false);
     }

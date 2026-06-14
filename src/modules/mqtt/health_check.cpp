@@ -37,11 +37,11 @@ namespace mqtt_health
         DEBUG_PRINTLN(ventilationOn ? "true" : "false");
     }
 
-    void handleHealthResponse(JsonDocument& doc)
+    void handleHealthResponse(JsonDocument &doc)
     {
         int requestId = doc["request_id"] | -1;
-        const char* type = doc["type"];
-        const char* status = doc["status"];
+        const char *type = doc["type"];
+        const char *status = doc["status"];
 
         if (requestId < 0 || type == nullptr || status == nullptr)
         {
@@ -95,13 +95,6 @@ namespace mqtt_health
     // Envia Hearthbeat para o servidor e aguarda o servidor responder
     void sendHealthCheckRequest()
     {
-        if (!mqttClient.connected())
-        {
-            DEBUG_PRINTLN("[HEALTH] MQTT desconectado. Health check nao enviado.");
-            serverAlive = false;
-            return;
-        }
-
         currentHealthRequestId = nextHealthRequestId;
         nextHealthRequestId++;
 
@@ -135,13 +128,6 @@ namespace mqtt_health
     void processServerHealthCheck()
     {
         unsigned long now = millis();
-
-        if (!mqttClient.connected())
-        {
-            waitingHealthResponse = false;
-            serverAlive = false;
-            return;
-        }
 
         if (waitingHealthResponse)
         {

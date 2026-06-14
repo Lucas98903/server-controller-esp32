@@ -10,7 +10,7 @@ namespace cfg
     constexpr bool DEBUG_SERIAL = true;
     constexpr bool DEBUG_VERBOSE = true;
 
-    constexpr const char* HOSTNAME = "ESP32_Server";
+    constexpr const char *HOSTNAME = "ESP32_Server";
 
     // Quantidade de tentativas para conectar com a internet
     constexpr int PRIMARY_RETRY_LIMIT = 3;
@@ -43,20 +43,20 @@ namespace cfg
     constexpr unsigned long FORCE_POWER_OFF = 15000;
 
     // =======================================- MQTT -=======================================
-    //Configuracoes do broker
-    constexpr const char* MQTT_BROKER_HOST = "192.168.89.227";
+    // Configuracoes do broker
+    constexpr const char *MQTT_BROKER_HOST = "192.168.89.227";
     constexpr uint16_t MQTT_BROKER_PORT = 1883;
     constexpr uint8_t MQTT_ATTEMPT_CONNECTION = 3;
     constexpr uint16_t MQTT_ATTEMPT_DELAY = 3000;
-    constexpr const char* MQTT_CLIENT_ID = "esp32-server-controller";
+    constexpr const char *MQTT_CLIENT_ID = "esp32-server-controller";
     constexpr unsigned long MQTT_BOOT_GRACE_MS = 90000;
-    constexpr uint8_t MQTT_FAILED_WINDOWS_BEFORE_POWER_ACTION = 3;
+    constexpr uint8_t MQTT_FAILED_BEFORE_POWER_ACTION = 3;
 
     // Topicos MQTT
-    constexpr const char* TOPIC_CMD_VENTILATION = "server-controller/cmd/change-fan-state";
-    constexpr const char* TOPIC_ACK_VENTILATION = "server-controller/ack/change-fan-state";
-    constexpr const char* TOPIC_HEALTH_REQUEST = "server-controller/health/request";
-    constexpr const char* TOPIC_HEALTH_RESPONSE = "server-controller/health/response";
+    constexpr const char *TOPIC_CMD_VENTILATION = "server-controller/cmd/change-fan-state";
+    constexpr const char *TOPIC_ACK_VENTILATION = "server-controller/ack/change-fan-state";
+    constexpr const char *TOPIC_HEALTH_REQUEST = "server-controller/health/request";
+    constexpr const char *TOPIC_HEALTH_RESPONSE = "server-controller/health/response";
 
     // Health check
     constexpr unsigned long HEALTH_INTERVAL_MS = 30000;
