@@ -18,7 +18,6 @@ namespace rtdb_manager
         bool resetServer = false;
 
         bool isPowerOn = false;
-        bool moboStatusServer = false;
         bool itsAlive = true;
 
         int powerOnCount = 0;
@@ -35,17 +34,14 @@ namespace rtdb_manager
     bool clearForcePowerOff();
     bool clearReset();
     bool updateServerStatus(bool isOn);
-    bool updatePowerOnCount(int count);
     bool updateItsAlive();
 
     // Fila de escritas pendentes — chamar do loop(), processar na network task
-    void enqueueSupplyStatusUpdate(bool isOn);
-    void enqueueMoboStatusUpdate(bool isOn);
+    void enqueueIsServerOn(bool isOn);
     void enqueueClearTurnServerOn();
     void enqueueClearForcePowerOff();
     void enqueueClearReset();
     void enqueueUpdateItsAlive(bool value);
-    void enqueuePowerOnCountUpdate(int count);
     void processPendingWrites();
 
     bool isStreamConnected();

@@ -43,9 +43,7 @@ namespace
             s_serverOnSinceMs = millis();
         s_lastServerOnState = serverIsOn;
 
-        // TODO: manter apenas uma unica fonte para informar que o servidor esta ligado
-        rtdb_manager::enqueueSupplyStatusUpdate(supplyIsOn);
-        rtdb_manager::enqueueMoboStatusUpdate(moboIsOn);
+        rtdb_manager::enqueueIsServerOn(serverIsOn);
 
         digitalWrite(cfg::LED_PIN, serverIsOn ? HIGH : LOW);
     }
@@ -126,7 +124,6 @@ namespace
             DEBUG_PRINTLN("[ACTION] Comando recebido: ligar servidor.");
             relay_action::pulsePowerButton();
             rtdb_manager::enqueueClearTurnServerOn();
-            rtdb_manager::enqueuePowerOnCountUpdate(s_deviceData.powerOnCount + 1);
         }
 
         if (s_deviceData.forcePowerOff)

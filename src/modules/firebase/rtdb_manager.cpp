@@ -26,10 +26,33 @@ namespace
     String currentEventData;
 
     unsigned long lastReconnectAttemptMs = 0;
-    unsigned long lastSuccessfulCommunicationMs = 0;
 
     constexpr unsigned long RECONNECT_INTERVAL_MS = 2000;
     constexpr size_t JSON_CAPACITY = 2048;
+
+    // --- Chaves JSON (nós e folhas) ---
+
+    constexpr const char *KEY_DESIRED_STATE = "desiredState";
+    constexpr const char *KEY_CURRENT_STATE = "currentState";
+
+    constexpr const char *KEY_TURN_SERVER_ON = "turnServerOn";
+    constexpr const char *KEY_FORCE_POWER_OFF = "forcePowerOff";
+    constexpr const char *KEY_VENTILATION_127 = "turnVentilation127On";
+    constexpr const char *KEY_RESET_SERVER = "resetServer";
+    constexpr const char *KEY_ITS_ALIVE = "itsAlive";
+    constexpr const char *KEY_IS_POWER_ON = "isPowerOn";
+
+    // --- Paths RTDB (SSE + HTTP PUT) ---
+
+    constexpr const char *PATH_ROOT = "/";
+    constexpr const char *PATH_DESIRED_STATE = "/desiredState";
+    constexpr const char *PATH_DESIRED_TURN_SERVER_ON = "/desiredState/turnServerOn";
+    constexpr const char *PATH_DESIRED_FORCE_POWER_OFF = "/desiredState/forcePowerOff";
+    constexpr const char *PATH_DESIRED_VENTILATION_127 = "/desiredState/turnVentilation127On";
+    constexpr const char *PATH_DESIRED_RESET_SERVER = "/desiredState/resetServer";
+    constexpr const char *PATH_DESIRED_ITS_ALIVE = "/desiredState/itsAlive";
+    constexpr const char *PATH_CURRENT_STATE = "/currentState";
+    constexpr const char *PATH_CURRENT_IS_SERVER_ON = "/currentState/isServerOn";
 
     // --- Thread safety (Core 0 = rede, Core 1 = loop principal) ---
 
@@ -45,21 +68,30 @@ namespace
         bool serverStatusPending = false;
         bool serverStatusValue = false;
 
-        bool moboStatusPending = false;
-        bool moboStatusValue = false;
-
         bool clearTurnServerOnPending = false;
         bool clearForcePowerOffPending = false;
         bool clearResetPending = false;
 
         bool updateItsAlivePending = false;
         bool itsAliveValue = true;
-
-        bool powerOnCountPending = false;
-        int powerOnCountValue = 0;
     };
 
     PendingWrites s_pending;
+
+    template <typename F>
+    void withPendingLock(F fn)
+    {
+        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
+            return;
+        fn();
+        xSemaphoreGive(s_pendingMutex);
+    }
+
+    void applyBool(JsonVariantConst obj, const char *key, bool &field)
+    {
+        if (obj[key].is<bool>())
+            field = obj[key].as<bool>();
+    }
 
     int parseJsonInt(JsonVariantConst value)
     {
@@ -146,140 +178,77 @@ namespace
 
         const bool ok = (httpCode == 200 || httpCode == 204);
         if (ok)
-            lastSuccessfulCommunicationMs = millis();
+            s_lastSuccessfulMsCache = millis();
 
         return ok;
     }
 
     void applyDesiredStateObject(JsonVariantConst desiredState)
     {
-        if (desiredState["turnServerOn"].is<bool>())
-            cachedData.turnServerOn = desiredState["turnServerOn"].as<bool>();
-
-        if (desiredState["forcePowerOff"].is<bool>())
-            cachedData.forcePowerOff = desiredState["forcePowerOff"].as<bool>();
-
-        if (desiredState["turnVentilationOn"].is<bool>())
-            cachedData.turnVentilationOn = desiredState["turnVentilationOn"].as<bool>();
-
-        if (desiredState["turnVentilation127On"].is<bool>())
-            cachedData.turnVentilation127On = desiredState["turnVentilation127On"].as<bool>();
-
-        if (desiredState["resetServer"].is<bool>())
-            cachedData.resetServer = desiredState["resetServer"].as<bool>();
-
-        if (desiredState["itsAlive"].is<bool>())
-            cachedData.itsAlive = desiredState["itsAlive"].as<bool>();
+        applyBool(desiredState, KEY_TURN_SERVER_ON, cachedData.turnServerOn);
+        applyBool(desiredState, KEY_FORCE_POWER_OFF, cachedData.forcePowerOff);
+        applyBool(desiredState, KEY_VENTILATION_127, cachedData.turnVentilation127On);
+        applyBool(desiredState, KEY_RESET_SERVER, cachedData.resetServer);
+        applyBool(desiredState, KEY_ITS_ALIVE, cachedData.itsAlive);
     }
 
     void applyCurrentStateObject(JsonVariantConst currentState)
     {
-        if (currentState["isPowerOn"].is<bool>())
-            cachedData.isPowerOn = currentState["isPowerOn"].as<bool>();
-
-        if (currentState["isMoboOn"].is<bool>())
-            cachedData.moboStatusServer = currentState["isMoboOn"].as<bool>();
-    }
-
-    void applyCountersObject(JsonVariantConst counters)
-    {
-        if (counters["powerOnCount"].is<int>() ||
-            counters["powerOnCount"].is<long>() ||
-            counters["powerOnCount"].is<long long>())
-        {
-            cachedData.powerOnCount = parseJsonInt(counters["powerOnCount"]);
-        }
+        applyBool(currentState, KEY_IS_POWER_ON, cachedData.isPowerOn);
     }
 
     void applyFullSnapshot(JsonVariantConst root)
     {
-        if (root["desiredState"].is<JsonObjectConst>())
-            applyDesiredStateObject(root["desiredState"]);
+        if (root[KEY_DESIRED_STATE].is<JsonObjectConst>())
+            applyDesiredStateObject(root[KEY_DESIRED_STATE]);
 
-        if (root["currentState"].is<JsonObjectConst>())
-            applyCurrentStateObject(root["currentState"]);
-
-        if (root["counters"].is<JsonObjectConst>())
-            applyCountersObject(root["counters"]);
+        if (root[KEY_CURRENT_STATE].is<JsonObjectConst>())
+            applyCurrentStateObject(root[KEY_CURRENT_STATE]);
     }
+
+    struct BoolLeaf
+    {
+        const char *path;
+        bool rtdb_manager::DeviceData::*field;
+    };
+
+    constexpr BoolLeaf BOOL_LEAVES[] = {
+        {PATH_DESIRED_TURN_SERVER_ON, &rtdb_manager::DeviceData::turnServerOn},
+        {PATH_DESIRED_FORCE_POWER_OFF, &rtdb_manager::DeviceData::forcePowerOff},
+        {PATH_DESIRED_VENTILATION_127, &rtdb_manager::DeviceData::turnVentilation127On},
+        {PATH_DESIRED_RESET_SERVER, &rtdb_manager::DeviceData::resetServer},
+        {PATH_DESIRED_ITS_ALIVE, &rtdb_manager::DeviceData::itsAlive},
+        {PATH_CURRENT_IS_SERVER_ON, &rtdb_manager::DeviceData::isPowerOn},
+    };
 
     void applyPartialUpdate(const String &path, JsonVariantConst data)
     {
-        if (path == "/")
+        if (path == PATH_ROOT)
         {
             applyFullSnapshot(data);
             return;
         }
-
-        if (path == "/desiredState")
+        if (path == PATH_DESIRED_STATE)
         {
             applyDesiredStateObject(data);
             return;
         }
-
-        if (path == "/desiredState/turnServerOn" && data.is<bool>())
-        {
-            cachedData.turnServerOn = data.as<bool>();
-            return;
-        }
-
-        if (path == "/desiredState/forcePowerOff" && data.is<bool>())
-        {
-            cachedData.forcePowerOff = data.as<bool>();
-            return;
-        }
-
-        if (path == "/desiredState/turnVentilation127On" && data.is<bool>())
-        {
-            cachedData.turnVentilation127On = data.as<bool>();
-            return;
-        }
-
-        if (path == "/desiredState/resetServer" && data.is<bool>())
-        {
-            cachedData.resetServer = data.as<bool>();
-            return;
-        }
-
-        if (path == "/desiredState/turnVentilationOn" && data.is<bool>())
-        {
-            cachedData.turnVentilationOn = data.as<bool>();
-            return;
-        }
-
-        if (path == "/currentState")
+        if (path == PATH_CURRENT_STATE)
         {
             applyCurrentStateObject(data);
             return;
         }
 
-        if (path == "/currentState/isPowerOn" && data.is<bool>())
+        if (data.is<bool>())
         {
-            cachedData.isPowerOn = data.as<bool>();
-            return;
-        }
-
-        if (path == "/currentState/isMoboOn" && data.is<bool>())
-        {
-            cachedData.moboStatusServer = data.as<bool>();
-            return;
-        }
-
-        if (path == "/counters")
-        {
-            applyCountersObject(data);
-            return;
-        }
-
-        if (path == "/counters/powerOnCount")
-        {
-            cachedData.powerOnCount = parseJsonInt(data);
-        }
-
-        if (path == "/desiredState/itsAlive" && data.is<bool>())
-        {
-            cachedData.itsAlive = data.as<bool>();
-            return;
+            for (const auto &leaf : BOOL_LEAVES)
+            {
+                if (path == leaf.path)
+                {
+                    cachedData.*leaf.field = data.as<bool>();
+                    return;
+                }
+            }
         }
     }
 
@@ -312,15 +281,14 @@ namespace
             return;
         }
 
-        const String path = doc["path"] | "/";
+        const String path = doc["path"] | PATH_ROOT;
         JsonVariantConst data = doc["data"];
 
         if (xSemaphoreTake(s_dataMutex, portMAX_DELAY) == pdTRUE)
         {
             applyPartialUpdate(path, data);
             hasFreshData = true;
-            lastSuccessfulCommunicationMs = millis();
-            s_lastSuccessfulMsCache = lastSuccessfulCommunicationMs;
+            s_lastSuccessfulMsCache = millis();
             xSemaphoreGive(s_dataMutex);
         }
 
@@ -376,8 +344,7 @@ namespace
                         return false;
                     }
 
-                    lastSuccessfulCommunicationMs = millis();
-                    s_lastSuccessfulMsCache = lastSuccessfulCommunicationMs;
+                    s_lastSuccessfulMsCache = millis();
                     s_streamConnectedCache = true;
                     DEBUG_PRINTLN("[RTDB] Stream conectado.");
                     currentEventName = "";
@@ -392,12 +359,9 @@ namespace
         return false;
     }
 
-    bool updateDesiredStateBool(const char *fieldName, bool value)
+    bool updateDesiredStateBool(const char *path, bool value)
     {
-        String suffix = "/desiredState/";
-        suffix += fieldName;
-
-        return sendPut(suffix.c_str(), value ? "true" : "false");
+        return sendPut(path, value ? "true" : "false");
     }
 }
 
@@ -408,7 +372,6 @@ namespace rtdb_manager
         hasFreshData = false;
         currentEventName = "";
         currentEventData = "";
-        lastSuccessfulCommunicationMs = 0;
         s_lastSuccessfulMsCache = 0;
         s_streamConnectedCache = false;
 
@@ -486,32 +449,27 @@ namespace rtdb_manager
 
     bool clearTurnServerOn()
     {
-        return updateDesiredStateBool("turnServerOn", false);
+        return updateDesiredStateBool(PATH_DESIRED_TURN_SERVER_ON, false);
     }
 
     bool clearForcePowerOff()
     {
-        return updateDesiredStateBool("forcePowerOff", false);
+        return updateDesiredStateBool(PATH_DESIRED_FORCE_POWER_OFF, false);
     }
 
     bool clearReset()
     {
-        return updateDesiredStateBool("resetServer", false);
+        return updateDesiredStateBool(PATH_DESIRED_RESET_SERVER, false);
     }
 
     bool updateItsAlive()
     {
-        return updateDesiredStateBool("itsAlive", true);
+        return updateDesiredStateBool(PATH_DESIRED_ITS_ALIVE, true);
     }
 
     bool updateServerStatus(bool isOn)
     {
-        return sendPut("/currentState/isPowerOn", isOn ? "true" : "false");
-    }
-
-    bool updatePowerOnCount(int count)
-    {
-        return sendPut("/counters/powerOnCount", String(count));
+        return sendPut(PATH_CURRENT_IS_SERVER_ON, isOn ? "true" : "false");
     }
 
     bool isStreamConnected()
@@ -528,64 +486,38 @@ namespace rtdb_manager
     // Enfileiramento de escritas (chamado do Core 1 / loop principal)
     // -------------------------------------------------------------------------
 
-    void enqueueSupplyStatusUpdate(bool isOn)
+    void enqueueIsServerOn(bool isOn)
     {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.serverStatusPending = true;
-        s_pending.serverStatusValue = isOn;
-        xSemaphoreGive(s_pendingMutex);
-    }
-
-    void enqueueMoboStatusUpdate(bool isOn)
-    {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.moboStatusPending = true;
-        s_pending.moboStatusValue = isOn;
-        xSemaphoreGive(s_pendingMutex);
+        withPendingLock([&]
+                        {
+            s_pending.serverStatusPending = true;
+            s_pending.serverStatusValue = isOn; });
     }
 
     void enqueueClearTurnServerOn()
     {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.clearTurnServerOnPending = true;
-        xSemaphoreGive(s_pendingMutex);
+        withPendingLock([]
+                        { s_pending.clearTurnServerOnPending = true; });
     }
 
     void enqueueClearForcePowerOff()
     {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.clearForcePowerOffPending = true;
-        xSemaphoreGive(s_pendingMutex);
+        withPendingLock([]
+                        { s_pending.clearForcePowerOffPending = true; });
     }
 
     void enqueueClearReset()
     {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.clearResetPending = true;
-        xSemaphoreGive(s_pendingMutex);
+        withPendingLock([]
+                        { s_pending.clearResetPending = true; });
     }
 
     void enqueueUpdateItsAlive(bool value)
     {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.updateItsAlivePending = true;
-        s_pending.itsAliveValue = value;
-        xSemaphoreGive(s_pendingMutex);
-    }
-
-    void enqueuePowerOnCountUpdate(int count)
-    {
-        if (xSemaphoreTake(s_pendingMutex, pdMS_TO_TICKS(10)) != pdTRUE)
-            return;
-        s_pending.powerOnCountPending = true;
-        s_pending.powerOnCountValue = count;
-        xSemaphoreGive(s_pendingMutex);
+        withPendingLock([&]
+                        {
+            s_pending.updateItsAlivePending = true;
+            s_pending.itsAliveValue = value; });
     }
 
     // -------------------------------------------------------------------------
@@ -605,24 +537,22 @@ namespace rtdb_manager
         xSemaphoreGive(s_pendingMutex);
 
         if (local.serverStatusPending)
-            sendPut("/currentState/isPowerOn", local.serverStatusValue ? "true" : "false");
+            sendPut(PATH_CURRENT_IS_SERVER_ON, local.serverStatusValue ? "true" : "false");
 
-        if (local.moboStatusPending)
-            sendPut("/currentState/isMoboOn", local.moboStatusValue ? "true" : "false");
-
-        if (local.clearTurnServerOnPending)
-            updateDesiredStateBool("turnServerOn", false);
-
-        if (local.clearForcePowerOffPending)
-            updateDesiredStateBool("forcePowerOff", false);
-
-        if (local.clearResetPending)
-            updateDesiredStateBool("resetServer", false);
+        struct
+        {
+            bool PendingWrites::*flag;
+            const char *path;
+        } const clearOps[] = {
+            {&PendingWrites::clearTurnServerOnPending, PATH_DESIRED_TURN_SERVER_ON},
+            {&PendingWrites::clearForcePowerOffPending, PATH_DESIRED_FORCE_POWER_OFF},
+            {&PendingWrites::clearResetPending, PATH_DESIRED_RESET_SERVER},
+        };
+        for (const auto &op : clearOps)
+            if (local.*op.flag)
+                updateDesiredStateBool(op.path, false);
 
         if (local.updateItsAlivePending)
-            updateDesiredStateBool("itsAlive", local.itsAliveValue);
-
-        if (local.powerOnCountPending)
-            sendPut("/counters/powerOnCount", String(local.powerOnCountValue));
+            updateDesiredStateBool(PATH_DESIRED_ITS_ALIVE, local.itsAliveValue);
     }
 }
