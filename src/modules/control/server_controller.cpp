@@ -12,6 +12,7 @@
 #include "modules/mqtt/mqtt_manager.h"
 #include "modules/mqtt/health_check.h"
 #include "modules/mqtt/ventilation.h"
+#include "modules/network/wifi/wifi_connection.h"
 
 #include "config.h"
 #include "debug.h"
@@ -24,9 +25,8 @@ namespace
 
     unsigned long s_lastAttemptPowerOffMs = 0;
     unsigned long s_serverOnSinceMs = 0;
-    uint8_t s_failedAttemptPorwerOff = 0;
-    bool s_lastServerOnState = false;
-    bool s_awaitingShutdown = false;
+    uint8_t s_failedAttemptPowerOff = 0;
+    bool s_powerOffPending = false;
 
     rtdb_manager::DeviceData s_deviceData;
 
@@ -34,46 +34,43 @@ namespace
 
     void updateHardwareStatus()
     {
-        const bool supplyIsOn = server_status::isSupplyOn();
-        const bool moboIsOn = server_status::isMoboOn();
         const bool serverIsOn = server_status::isServerOn();
-
-        // Se o servidor acabou de ligar, registra o tempo de início para usar na lógica de boot grace.
-        if (serverIsOn && !s_lastServerOnState)
-            s_serverOnSinceMs = millis();
-        s_lastServerOnState = serverIsOn;
-
         rtdb_manager::enqueueIsServerOn(serverIsOn);
-
-        digitalWrite(cfg::LED_PIN, serverIsOn ? HIGH : LOW);
     }
 
-    void tryPowerOff()
+    // Não-bloqueante: retorna true enquanto o desligamento está em andamento.
+    // Deve ser chamada a cada tick de update() até retornar false.
+    bool tickPowerOff()
     {
-        // Se o servidor já estiver desligado, reseta os estados de tentativa de desligamento e retorna.
         if (!server_status::isServerOn())
         {
+            s_powerOffPending = false;
             s_lastAttemptPowerOffMs = 0;
-            s_failedAttemptPorwerOff = 0;
-            return;
+            s_failedAttemptPowerOff = 0;
+            return false;
         }
 
-        // Se já estamos aguardando o desligamento, não faz nada.
-        if (s_lastAttemptPowerOffMs == 0)
+        const unsigned long now = millis();
+
+        if (!s_powerOffPending)
         {
-            s_lastAttemptPowerOffMs = millis();
-
-            // Faz tentativa de desligamento. Se já falhou várias vezes, faz um desligamento forçado.
-            if (s_failedAttemptPorwerOff < cfg::MQTT_FAILED_BEFORE_POWER_ACTION)
-                relay_action::pulsePowerButton();
-            else
-                relay_action::forcePowerButton();
-
-            s_failedAttemptPorwerOff++;
+            s_lastAttemptPowerOffMs = now;
+            s_powerOffPending = true;
+            return true;
         }
 
-        if (millis() - s_lastAttemptPowerOffMs > ATTEMPT_POWER_OFF_WAIT_MS)
-            s_lastAttemptPowerOffMs = 0;
+        if (now - s_lastAttemptPowerOffMs <= ATTEMPT_POWER_OFF_WAIT_MS)
+            return true;
+
+        s_lastAttemptPowerOffMs = now;
+        s_failedAttemptPowerOff++;
+
+        if (s_failedAttemptPowerOff < cfg::MQTT_FAILED_BEFORE_POWER_ACTION)
+            relay_action::pulsePowerButton();
+        else
+            relay_action::forcePowerButton();
+
+        return true;
     }
 
     void checkMqttConnect()
@@ -87,7 +84,6 @@ namespace
             if (mqttClient.connected())
                 return;
 
-            // Faz tentativas de reconexão apenas a cada MQTT_RECONNECT_WAIT_MS para evitar flood de mensagens e ações.
             mqtt_manager::setupMqtt(mqttCallback);
             if (mqtt_manager::connectMqtt())
                 return;
@@ -100,13 +96,14 @@ namespace
             // Se chegou aqui, o MQTT não está conectado e o tempo de boot grace já passou.
             // Tenta desligar o servidor para evitar ficar com o servidor ligado sem controle.
             // TODO: desenvolver uma maneira de enviar informacao que o MQTT falhou e o ESP32 desligou o servidor.
-            tryPowerOff();
+            tickPowerOff();
         }
         else
         {
+            s_powerOffPending = false;
             s_lastAttemptPowerOffMs = 0;
             s_serverOnSinceMs = 0;
-            s_failedAttemptPorwerOff = 0;
+            s_failedAttemptPowerOff = 0;
         }
     }
 
@@ -136,7 +133,7 @@ namespace
         if (s_deviceData.resetServer)
         {
             DEBUG_PRINTLN("[ACTION] Comando recebido: resetar servidor.");
-            relay_action::PulseResetButton();
+            relay_action::pulseResetButton();
             rtdb_manager::enqueueClearReset();
         }
     }
@@ -160,12 +157,65 @@ namespace
             s_deviceData.itsAlive = true;
         }
     }
+
+    bool shouldRestoreServerAfterReconnect = false;
+
+    bool isRtdbOperational()
+    {
+        const unsigned long now = millis();
+        const unsigned long lastOk = rtdb_manager::getLastSuccessfulCommunicationMs();
+
+        if (rtdb_manager::isStreamConnected())
+            return true;
+
+        if (lastOk != 0 && (now - lastOk) < cfg::RTDB_COMMUNICATION_TIMEOUT_MS)
+            return true;
+
+        return false;
+    }
+
+    bool isSystemOperational()
+    {
+        return wifi_connection::isConnected() && isRtdbOperational();
+    }
+
+    bool lostConnection()
+    {
+        const bool suspendSystem = !isSystemOperational() && server_status::isServerOn() && !shouldRestoreServerAfterReconnect;
+
+        if (suspendSystem)
+        {
+            DEBUG_PRINTLN("[NET] Falha de conectividade util detectada. Aguardando confirmacao...");
+            shouldRestoreServerAfterReconnect = true;
+        }
+
+        if (shouldRestoreServerAfterReconnect && server_status::isServerOn())
+        {
+            tickPowerOff();
+        }
+
+        const bool restoreSystem = isSystemOperational() && !server_status::isServerOn() && shouldRestoreServerAfterReconnect;
+
+        if (restoreSystem)
+        {
+            DEBUG_PRINTLN("[NET] Conectividade util restabelecida.");
+            shouldRestoreServerAfterReconnect = false;
+            relay_action::pulsePowerButton();
+        }
+        return shouldRestoreServerAfterReconnect;
+    }
 }
 
 namespace server_controller
 {
     void update()
     {
+        const bool serverIsOn = server_status::isServerOn();
+        digitalWrite(cfg::LED_PIN, serverIsOn ? HIGH : LOW);
+
+        if (lostConnection())
+            return;
+
         updateHardwareStatus();
         checkMqttConnect();
         dispatchRtdbCommands();

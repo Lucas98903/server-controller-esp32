@@ -10,7 +10,7 @@ namespace relay_action
     void setRelayState(int pin, bool active);
     void pulsePowerButton();
     void forcePowerButton();
-    void PulseResetButton();
+    void pulseResetButton();
 }
 
 #endif // RELAY_ACTION_H

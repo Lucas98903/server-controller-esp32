@@ -82,9 +82,7 @@ namespace mqtt_health
             missedHealthResponses++;
 
             if (missedHealthResponses >= cfg::MAX_HEALTH_MISSES)
-            {
                 serverAlive = false;
-            }
 
             DEBUG_PRINTLN("[HEALTH] Servidor respondeu, mas status nao e healthy.");
         }
@@ -99,9 +97,7 @@ namespace mqtt_health
         nextHealthRequestId++;
 
         if (nextHealthRequestId <= 0)
-        {
             nextHealthRequestId = 1;
-        }
 
         JsonDocument requestDoc;
         requestDoc["request_id"] = currentHealthRequestId;

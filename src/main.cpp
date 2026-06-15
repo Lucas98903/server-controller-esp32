@@ -43,8 +43,5 @@ void setup()
 
 void loop()
 {
-    if (!connectivity_monitor::update())
-        return;
-
     server_controller::update();
 }

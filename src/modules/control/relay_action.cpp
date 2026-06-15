@@ -22,13 +22,9 @@ namespace relay_action
     void setRelayState(int pin, bool active)
     {
         if (cfg::RELAY_ACTIVE_LOW)
-        {
             digitalWrite(pin, active ? LOW : HIGH);
-        }
         else
-        {
             digitalWrite(pin, active ? HIGH : LOW);
-        }
     }
 
     void pulsePowerButton()
@@ -41,7 +37,7 @@ namespace relay_action
         pulseRelay(cfg::STARTER_PIN, cfg::FORCE_POWER_OFF);
     }
 
-    void PulseResetButton()
+    void pulseResetButton()
     {
         pulseRelay(cfg::RESET_PIN, cfg::POWER_ON_AND_RESET);
     }
